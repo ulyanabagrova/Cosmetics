@@ -2,13 +2,13 @@ import React, { Suspense, useRef, useMemo, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { Canvas, useFrame } from '@react-three/fiber'
 import {
-  OrbitControls,
   useGLTF,
   Environment,
   Center,
   ContactShadows,
   ScrollControls,
-  useScroll
+  useScroll,
+  OrbitControls
 } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -45,10 +45,10 @@ function Model() {
         child.material.metalness > 0.1 ||
         child.material.name.toLowerCase().includes('metal')
       ) {
-        child.material.metalness = 1.0
-        child.material.roughness = 0.18
-        child.material.envMapIntensity = 0.7
-        child.material.color = new THREE.Color('#8a8a8a')
+        child.material.metalness = 1
+        child.material.roughness = 0.2
+        child.material.envMapIntensity = 0.8
+        child.material.color = new THREE.Color('#7a7a7a')
       }
 
       // стекло
@@ -56,7 +56,7 @@ function Model() {
         child.material.transparent ||
         child.material.name.toLowerCase().includes('glass')
       ) {
-        child.material.transmission = 1.0
+        child.material.transmission = 1
         child.material.thickness = 1.2
         child.material.roughness = 0.15
         child.material.envMapIntensity = 1.2
@@ -64,54 +64,48 @@ function Model() {
     })
   }, [scene, initialPos])
 
-  useFrame((state, delta) => {
+  useFrame((state) => {
     const t = scroll.offset
 
-    // ✨ лёгкие движения деталей (очень subtle)
+    // 🧴 лёгкие анимации деталей (без дрожания)
     if (lidRef.current) {
-      const lidScroll = scroll.range(0, 0.4)
-      lidRef.current.position.y = THREE.MathUtils.damp(
-        lidRef.current.position.y,
-        initialPos.lid + lidScroll * 0.08,
-        4,
-        delta
-      )
+      lidRef.current.position.y = initialPos.lid + t * 0.08
     }
 
     if (elipsRef.current) {
-      const elipsScroll = scroll.range(0.3, 0.3)
-      elipsRef.current.position.y = THREE.MathUtils.damp(
-        elipsRef.current.position.y,
-        initialPos.elips - elipsScroll * 0.02,
-        4,
-        delta
-      )
+      elipsRef.current.position.y = initialPos.elips - t * 0.02
     }
 
-    // 🎥 ЭЛЕГАНТНАЯ ОРБИТА КАМЕРЫ
+    // 🎥 C I N E M A T I C   R I G   O R B I T
 
     const angle = t * Math.PI * 2
     const radius = 1.35
 
-    // мягкий наклон (кинематографичный, не “ломаный”)
-    const tilt = 0.22 // ≈ 12–13 градусов
+    // наклон орбиты (фиксированный, не синусный)
+    const tilt = 12 * (Math.PI / 180)
 
-    // базовая орбита
+    // базовая позиция
     let x = Math.cos(angle) * radius
     let z = Math.sin(angle) * radius
+    let y = 0
 
-    // наклон орбиты (важный момент — без синусных “качелей”)
-    const y = Math.sin(angle) * tilt * 0.6
+    // наклон всей орбиты (правильный cinematic метод)
+    const cos = Math.cos(tilt)
+    const sin = Math.sin(tilt)
 
-    // лёгкий подъём камеры (luxury framing)
-    const finalY = y + 0.15
+    const y2 = y * cos - z * sin
+    const z2 = y * sin + z * cos
 
-    // плавное движение
-    state.camera.position.x = THREE.MathUtils.damp(state.camera.position.x, x, 4, delta)
-    state.camera.position.y = THREE.MathUtils.damp(state.camera.position.y, finalY, 4, delta)
-    state.camera.position.z = THREE.MathUtils.damp(state.camera.position.z, z, 4, delta)
+    const finalPos = new THREE.Vector3(
+      x,
+      y2 + 0.15, // лёгкий подъём камеры
+      z2
+    )
 
-    // всегда центр кадра = продукт
+    // 💡 ВАЖНО: lerp вместо damp → убирает mobile jitter
+    state.camera.position.lerp(finalPos, 0.08)
+
+    // всегда центр
     state.camera.lookAt(0, 0, 0)
   })
 
@@ -132,9 +126,9 @@ function App() {
       >
         <color attach="background" args={['#050505']} />
 
-        <ScrollControls pages={4} damping={0.18}>
+        <ScrollControls pages={4} damping={0.12}>
           <Suspense fallback={null}>
-            <Center top position={[0, -0.2, 0]}>
+            <Center>
               <Model />
             </Center>
 
@@ -152,7 +146,7 @@ function App() {
 
             <ContactShadows
               position={[0, -0.01, 0]}
-              opacity={0.55}
+              opacity={0.6}
               scale={10}
               blur={2.5}
               far={1}
