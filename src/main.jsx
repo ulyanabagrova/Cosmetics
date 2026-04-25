@@ -21,6 +21,7 @@ function Model() {
 
   const [initialPos] = useState({ lid: 0, elips: 0 })
 
+  // материалы + поиск деталей
   useMemo(() => {
     scene.traverse((child) => {
       if (!child.isMesh) return
@@ -28,13 +29,11 @@ function Model() {
       child.castShadow = true
       child.receiveShadow = true
 
-      // крышка
       if (child.name.toLowerCase().includes('1place')) {
         lidRef.current = child
         initialPos.lid = child.position.y
       }
 
-      // помпа
       if (child.name.toLowerCase().includes('elips')) {
         elipsRef.current = child
         initialPos.elips = child.position.y
@@ -43,18 +42,18 @@ function Model() {
       // металл
       if (
         child.material.metalness > 0.1 ||
-        child.material.name.toLowerCase().includes('metal')
+        (child.material.name || '').toLowerCase().includes('metal')
       ) {
         child.material.metalness = 1
-        child.material.roughness = 0.2
-        child.material.envMapIntensity = 0.8
+        child.material.roughness = 0.22
+        child.material.envMapIntensity = 0.9
         child.material.color = new THREE.Color('#7a7a7a')
       }
 
       // стекло
       if (
         child.material.transparent ||
-        child.material.name.toLowerCase().includes('glass')
+        (child.material.name || '').toLowerCase().includes('glass')
       ) {
         child.material.transmission = 1
         child.material.thickness = 1.2
@@ -65,9 +64,9 @@ function Model() {
   }, [scene, initialPos])
 
   useFrame((state) => {
-    const t = scroll.offset
+    const t = scroll.offset // 0..1
 
-    // 🧴 лёгкие анимации деталей (без дрожания)
+    // --- анимация деталей (без дергания)
     if (lidRef.current) {
       lidRef.current.position.y = initialPos.lid + t * 0.08
     }
@@ -76,36 +75,29 @@ function Model() {
       elipsRef.current.position.y = initialPos.elips - t * 0.02
     }
 
-    // 🎥 C I N E M A T I C   R I G   O R B I T
-
+    // --- ИДЕАЛЬНАЯ ОРБИТА КАМЕРЫ (без “зум-эффекта”)
     const angle = t * Math.PI * 2
     const radius = 1.35
 
-    // наклон орбиты (фиксированный, не синусный)
-    const tilt = 12 * (Math.PI / 180)
-
-    // базовая позиция
-    let x = Math.cos(angle) * radius
-    let z = Math.sin(angle) * radius
-    let y = 0
-
-    // наклон всей орбиты (правильный cinematic метод)
-    const cos = Math.cos(tilt)
-    const sin = Math.sin(tilt)
-
-    const y2 = y * cos - z * sin
-    const z2 = y * sin + z * cos
-
-    const finalPos = new THREE.Vector3(
-      x,
-      y2 + 0.15, // лёгкий подъём камеры
-      z2
+    // базовая окружность в XZ
+    const base = new THREE.Vector3(
+      Math.cos(angle) * radius,
+      0,
+      Math.sin(angle) * radius
     )
 
-    // 💡 ВАЖНО: lerp вместо damp → убирает mobile jitter
-    state.camera.position.lerp(finalPos, 0.08)
+    // наклон всей орбиты (как один риг)
+    const tilt = THREE.MathUtils.degToRad(12)
+    const m = new THREE.Matrix4().makeRotationX(tilt)
+    base.applyMatrix4(m)
 
-    // всегда центр
+    // лёгкий подъём кадра
+    base.y += 0.15
+
+    // стабильное движение (без jitter)
+    state.camera.position.lerp(base, 0.1)
+
+    // всегда смотрим в центр
     state.camera.lookAt(0, 0, 0)
   })
 
@@ -114,7 +106,15 @@ function Model() {
 
 function App() {
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#050505' }}>
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        background: '#050505',
+        overflow: 'hidden',       // 🔥 ВАЖНО: блокируем скролл страницы
+        touchAction: 'none'       // 🔥 ВАЖНО для iOS
+      }}
+    >
       <Canvas
         shadows
         camera={{ position: [0, 0.2, 1.2], fov: 30 }}
@@ -126,7 +126,8 @@ function App() {
       >
         <color attach="background" args={['#050505']} />
 
-        <ScrollControls pages={4} damping={0.12}>
+        {/* 🔥 СКРОЛЛ ТОЛЬКО ВНУТРИ КАНВАСА */}
+        <ScrollControls pages={4} damping={0.1} htmlScroll={false}>
           <Suspense fallback={null}>
             <Center>
               <Model />
@@ -154,13 +155,14 @@ function App() {
           </Suspense>
         </ScrollControls>
 
-        <OrbitControls enableZoom={false} enablePan={false} />
+        {/* можно оставить выключенным, чтобы не мешал */}
+        <OrbitControls enableZoom={false} enablePan={false} enableRotate={false} />
       </Canvas>
     </div>
   )
 }
 
-const rootElement = document.getElementById('root')
-if (rootElement) {
-  ReactDOM.createRoot(rootElement).render(<App />)
+const root = document.getElementById('root')
+if (root) {
+  ReactDOM.createRoot(root).render(<App />)
 }
