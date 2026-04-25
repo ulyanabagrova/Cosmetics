@@ -10,24 +10,24 @@ import {
 } from '@react-three/drei'
 import * as THREE from 'three'
 
+/* ✅ универсальный scroll (работает на iPhone) */
 function useScrollProgress() {
-  const [progress, setProgress] = useState(0)
+  const [t, setT] = useState(0)
 
   useEffect(() => {
-    const handleScroll = () => {
+    const onScroll = () => {
       const scrollTop = window.scrollY
       const height = document.body.scrollHeight - window.innerHeight
-      const t = height > 0 ? scrollTop / height : 0
-      setProgress(t)
+      setT(height > 0 ? scrollTop / height : 0)
     }
 
-    window.addEventListener('scroll', handleScroll)
-    handleScroll()
+    window.addEventListener('scroll', onScroll)
+    onScroll()
 
-    return () => window.removeEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  return progress
+  return t
 }
 
 function Model() {
@@ -40,6 +40,7 @@ function Model() {
 
   const [initialPos] = useState({ lid: 0, elips: 0 })
 
+  /* ✅ материалы + запоминаем позиции */
   useMemo(() => {
     scene.traverse((child) => {
       if (!child.isMesh) return
@@ -78,31 +79,32 @@ function Model() {
   }, [scene, initialPos])
 
   useFrame((state) => {
-    // 🎥 ЧИСТАЯ ОРБИТА (БЕЗ ЗУМА)
-
+    /* 🎥 КАМЕРА — ЧИСТАЯ ОРБИТА (БЕЗ ЗУМА) */
     const angle = t * Math.PI * 2
-    const radius = 1.4
+    const radius = 1.35
 
-    // базовая позиция
     const x = Math.cos(angle) * radius
     const z = Math.sin(angle) * radius
 
-    // наклон орбиты через rotation matrix
+    // НАКЛОН ОРБИТЫ (фиксированный)
     const tilt = THREE.MathUtils.degToRad(12)
     const y = Math.sin(angle) * Math.sin(tilt) * 0.4
 
-    // ЖЁСТКО задаём позицию (без damp!)
     state.camera.position.set(x, y + 0.2, z)
-
     state.camera.lookAt(0, 0, 0)
 
-    // 🎯 анимация деталей
+    /* 🧴 ВОЗВРАЩАЕМ ТВОЮ АНИМАЦИЮ */
+
     if (lidRef.current) {
-      lidRef.current.position.y = initialPos.lid + t * 0.08
+      // плавное открытие крышки
+      const lidT = Math.min(t * 2.5, 1)
+      lidRef.current.position.y = initialPos.lid + lidT * 0.1
     }
 
     if (elipsRef.current) {
-      elipsRef.current.position.y = initialPos.elips - t * 0.02
+      // помпа вниз после 30% скролла
+      const pumpT = Math.max((t - 0.3) * 2, 0)
+      elipsRef.current.position.y = initialPos.elips - pumpT * 0.022
     }
   })
 
@@ -114,7 +116,7 @@ function App() {
     <div style={{ height: '400vh', background: '#050505' }}>
       <Canvas
         style={{ position: 'fixed', top: 0 }}
-        camera={{ position: [0, 0.2, 1.2], fov: 30 }}
+        camera={{ position: [0, 0.2, 1.2], fov: 25 }} // 👈 меньше FOV = меньше “зум-эффекта”
       >
         <Suspense fallback={null}>
           <Center>
